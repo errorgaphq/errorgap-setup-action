@@ -1,0 +1,85 @@
+name: Setup Errorgap
+description: >-
+  Export an Errorgap project's connection to the job environment (ERRORGAP_*
+  and, for @errorgap/nuxt, NUXT_PUBLIC_ERRORGAP_*). Exports nothing without
+  an API key, so reporting stays off wherever the secret is unset.
+author: Errorgap
+branding:
+  icon: alert-octagon
+  color: red
+
+inputs:
+  api-key:
+    description: The project's API key (a secret). Leave it empty to export nothing.
+    required: false
+    default: ""
+  endpoint:
+    description: The Errorgap instance, such as https://acme.errorgap.com.
+    required: true
+  project-slug:
+    description: The project's slug in Errorgap.
+    required: true
+  environment:
+    description: The environment reported with errors (production, staging, beta, ...).
+    required: true
+  release:
+    description: The release reported with errors. Defaults to the commit being built.
+    required: false
+    default: ${{ github.sha }}
+  nuxt:
+    description: Also export NUXT_PUBLIC_ERRORGAP_* for @errorgap/nuxt's runtime config.
+    required: false
+    default: "false"
+
+outputs:
+  enabled:
+    description: "'true' when the variables were exported, 'false' when there was no API key."
+    value: ${{ steps.export.outputs.enabled }}
+
+runs:
+  using: composite
+  steps:
+    - id: export
+      shell: bash
+      env:
+        INPUT_API_KEY: ${{ inputs.api-key }}
+        INPUT_ENDPOINT: ${{ inputs.endpoint }}
+        INPUT_PROJECT_SLUG: ${{ inputs.project-slug }}
+        INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        INPUT_RELEASE: ${{ inputs.release }}
+        INPUT_NUXT: ${{ inputs.nuxt }}
+      run: |
+        if [[ -z "$INPUT_API_KEY" ]]; then
+          echo "No Errorgap API key; nothing exported, reporting stays off."
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo "::add-mask::$INPUT_API_KEY"
+        release="${INPUT_RELEASE:-$GITHUB_SHA}"
+
+        # The endpoint and slug are often already in the environment (from a
+        # committed env file); only write them when they're missing or differ.
+        if [[ "${ERRORGAP_ENDPOINT:-}" != "$INPUT_ENDPOINT" ]]; then
+          echo "ERRORGAP_ENDPOINT=$INPUT_ENDPOINT" >> "$GITHUB_ENV"
+        fi
+        if [[ "${ERRORGAP_PROJECT_SLUG:-}" != "$INPUT_PROJECT_SLUG" ]]; then
+          echo "ERRORGAP_PROJECT_SLUG=$INPUT_PROJECT_SLUG" >> "$GITHUB_ENV"
+        fi
+        {
+          echo "ERRORGAP_API_KEY=$INPUT_API_KEY"
+          echo "ERRORGAP_ENVIRONMENT=$INPUT_ENVIRONMENT"
+          echo "ERRORGAP_RELEASE=$release"
+        } >> "$GITHUB_ENV"
+
+        if [[ "$INPUT_NUXT" == "true" ]]; then
+          {
+            echo "NUXT_PUBLIC_ERRORGAP_API_KEY=$INPUT_API_KEY"
+            echo "NUXT_PUBLIC_ERRORGAP_ENDPOINT=$INPUT_ENDPOINT"
+            echo "NUXT_PUBLIC_ERRORGAP_PROJECT_SLUG=$INPUT_PROJECT_SLUG"
+            echo "NUXT_PUBLIC_ERRORGAP_ENVIRONMENT=$INPUT_ENVIRONMENT"
+            echo "NUXT_PUBLIC_ERRORGAP_RELEASE=$release"
+          } >> "$GITHUB_ENV"
+        fi
+
+        echo "enabled=true" >> "$GITHUB_OUTPUT"
+        echo "Errorgap: $INPUT_PROJECT_SLUG at $INPUT_ENDPOINT, environment $INPUT_ENVIRONMENT, release $release"

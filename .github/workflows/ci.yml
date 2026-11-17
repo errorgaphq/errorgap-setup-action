@@ -1,0 +1,68 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  with-key:
+    name: Exports with an API key
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: setup
+        uses: ./
+        with:
+          api-key: test-key-123
+          endpoint: https://acme.errorgap.com
+          project-slug: demo
+          environment: staging
+          release: abc123
+          nuxt: "true"
+      - run: |
+          test "${{ steps.setup.outputs.enabled }}" = "true"
+          test "$ERRORGAP_API_KEY" = "test-key-123"
+          test "$ERRORGAP_ENDPOINT" = "https://acme.errorgap.com"
+          test "$ERRORGAP_PROJECT_SLUG" = "demo"
+          test "$ERRORGAP_ENVIRONMENT" = "staging"
+          test "$ERRORGAP_RELEASE" = "abc123"
+          test "$NUXT_PUBLIC_ERRORGAP_API_KEY" = "test-key-123"
+          test "$NUXT_PUBLIC_ERRORGAP_ENDPOINT" = "https://acme.errorgap.com"
+          test "$NUXT_PUBLIC_ERRORGAP_PROJECT_SLUG" = "demo"
+          test "$NUXT_PUBLIC_ERRORGAP_ENVIRONMENT" = "staging"
+          test "$NUXT_PUBLIC_ERRORGAP_RELEASE" = "abc123"
+
+  defaults:
+    name: Defaults to the commit and no Nuxt variables
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          api-key: test-key-123
+          endpoint: https://acme.errorgap.com
+          project-slug: demo
+          environment: production
+      - run: |
+          test "$ERRORGAP_RELEASE" = "${{ github.sha }}"
+          test -z "${NUXT_PUBLIC_ERRORGAP_API_KEY:-}"
+          test -z "${NUXT_PUBLIC_ERRORGAP_ENDPOINT:-}"
+
+  without-key:
+    name: Exports nothing without an API key
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: setup
+        uses: ./
+        with:
+          endpoint: https://acme.errorgap.com
+          project-slug: demo
+          environment: production
+          nuxt: "true"
+      - run: |
+          test "${{ steps.setup.outputs.enabled }}" = "false"
+          test -z "${ERRORGAP_API_KEY:-}"
+          test -z "${ERRORGAP_ENDPOINT:-}"
+          test -z "${ERRORGAP_ENVIRONMENT:-}"
+          test -z "${NUXT_PUBLIC_ERRORGAP_API_KEY:-}"
